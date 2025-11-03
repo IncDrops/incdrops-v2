@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Sparkles, Zap, TrendingUp, Users, Copy, Heart, RefreshCw, X, Filter, Loader2, Clock, Mic, Image, Video, FileText, Mail, ArrowLeft, Download, User } from 'lucide-react';
-import { GoogleGenerativeAI } from '@google/generative-ai'; // Your import is correct
-
-// Get the VITE key from environment variables
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(API_KEY);
+// We do NOT import GoogleGenerativeAI here, because we use 'fetch'
 
 export default function ContentGenerator({ onNavigate, user }) {
   const [formData, setFormData] = useState({
@@ -14,7 +10,7 @@ export default function ContentGenerator({ onNavigate, user }) {
     contentType: 'social',
   });
 
-  const [ideas, setIdeas] =useState([]);
+  const [ideas, setIdeas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentTier, setCurrentTier] = useState('free'); // free, basic, pro, business
   const [usage, setUsage] = useState({ month: '', count: 0 }); // monthly usage tracker
@@ -83,7 +79,6 @@ export default function ContentGenerator({ onNavigate, user }) {
       const initial = { month: mk, count: legacy ? parseInt(legacy, 10) || 0 : 0 };
       setUsage(initial);
       localStorage.setItem('incdrops_usage_v2', JSON.stringify(initial));
-      // keep legacy for backwards compatibility, but not required
     }
   }, [user]);
 
@@ -126,76 +121,62 @@ export default function ContentGenerator({ onNavigate, user }) {
   };
 
   // ------------------------------------------------------------------
-  //  THIS IS THE NEW, REPLACED FUNCTION
+  //  THIS IS YOUR "FLAWLESS" API FUNCTION, MERGED INTO THE NEW FILE
+  //  I have changed "Generate 10" to "Generate 5" to save costs
   // ------------------------------------------------------------------
   const callGeminiAPI = async (formData) => {
-    // 1. Safety check for the API key
-    if (!API_KEY) {
-      return { success: false, error: "API Key is missing. Add VITE_GEMINI_API_KEY to your Vercel project settings." };
+    const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
+      alert('API Key is missing. Please add VITE_GEMINI_API_KEY to your Vercel project settings.');
+      return { success: false, error: 'API key not configured' };
     }
-    
-    // 2. Get form data
+    // Using your working model name
+    const MODEL = 'gemini-2.0-flash-exp'; 
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
     const { industry, targetAudience, services, contentType } = formData;
-
-    // 3. Build the Prompt (now with 5 ideas)
-    const prompt = `
-      You are an expert content marketing strategist. Generate 5 content ideas based on the following inputs.
-      Return the ideas as a valid JSON array. Do NOT include any text before or after the JSON array.
-
-      Each idea in the array should be an object with this exact structure:
-      {
-        "title": "A catchy, short title for the content",
-        "description": "A 2-3 sentence detailed description of the content idea, explaining the angle and value.",
-        "platforms": ["Platform 1", "Platform 2"],
-        "hashtags": ["#hashtag1", "#hashtag2"],
-        "type": "${contentType || 'social'}"
-      }
-
-      Here is the user's data:
-      - Industry: ${industry || 'general business'}
-      - Target Audience: ${targetAudience || 'general audience'}
-      - Services/Products: ${services || 'various products'}
-      - Content Type: ${contentType || 'social post'}
-    `;
-
+    
+    // Updated prompt for 5 ideas
+    const prompt = `Generate 5 ${contentType} content ideas for a ${industry} business targeting ${targetAudience}. ${services ? `They offer: ${services}` : ''} Format each idea EXACTLY like this (one per line): TITLE: [short title] | DESC: [brief description] | PLATFORMS: [platform1, platform2] | TAGS: [#tag1, #tag2, #tag3] Generate 5 ideas in this format. Keep titles under 50 characters and descriptions under 150 characters.`;
+    
     try {
-      // 4. Call Google AI
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+      const response = await fetch(`${API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 2000, temperature: 0.7 }
+        })
+      });
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      const data = await response.json();
+      let text = data.candidates[0].content.parts[0].text;
+      const lines = text.split('\n').filter(line => line.includes('TITLE:'));
       
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
-      // 5. Parse the JSON (same as your original logic)
-      let parsed = [];
-      try {
-        const match = text.match(/\[[\s\S]*\]/);
-        parsed = match ? JSON.parse(match[0]) : [];
-      } catch {
-        console.error("Failed to parse JSON, using fallback.");
-        // Fallback logic
-        parsed = Array.from({ length: 5 }).map((_, i) => ({
-          id: `${Date.now()}-${i}`,
-          title: `Idea ${i + 1} for ${formData.industry || 'your brand'}`,
-          description: `A quick concept targeting ${formData.targetAudience || 'your audience'}.`,
-          platforms: ['Instagram', 'TikTok'].slice(0, (i % 2) + 1),
-          hashtags: ['#growth', '#brand'].slice(0, (i % 2) + 1),
-          type: formData.contentType || 'social',
-        }));
-      }
-
-      const withIds = parsed.map((it, i) => ({ ...it, id: it.id || `${Date.now()}-${i}` }));
-      return { success: true, ideas: withIds };
-
+      const ideas = lines.map((line, index) => {
+        const titleMatch = line.match(/TITLE:\s*(.+?)\s*\|/);
+        const descMatch = line.match(/DESC:\s*(.+?)\s*\|/);
+        const platformsMatch = line.match(/PLATFORMS:\s*(.+?)\s*\|/);
+        const tagsMatch = line.match(/TAGS:\s*(.+?)$/);
+        return {
+          id: Date.now() + index,
+          title: titleMatch ? titleMatch[1].trim() : `Idea ${index + 1}`,
+          description: descMatch ? descMatch[1].trim() : 'Content idea description',
+          platforms: platformsMatch ? platformsMatch[1].split(',').map(p => p.trim()) : ['Social Media'],
+          hashtags: tagsMatch ? tagsMatch[1].split(',').map(t => t.trim()) : ['#content'],
+          timestamp: new Date().toISOString(),
+          contentType: contentType
+        };
+      }).slice(0, 5); // Sliced to 5
+      
+      return { success: true, ideas };
     } catch (error) {
-      console.error('Frontend Google AI Error:', error);
-      return { success: false, error: "Failed to generate ideas. The API key might be invalid or restricted." };
+      console.error('Gemini API Error:', error);
+      return { success: false, error: error.message };
     }
   };
   // ------------------------------------------------------------------
-  //  END OF REPLACED FUNCTION
+  //  END OF MERGED FUNCTION
   // ------------------------------------------------------------------
-
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -212,7 +193,7 @@ export default function ContentGenerator({ onNavigate, user }) {
     }
 
     setLoading(true);
-    const result = await callGeminiAPI(formData);
+    const result = await callGeminiAPI(formData); // This now calls your working function
     setLoading(false);
 
     if (result.success) {
@@ -230,7 +211,7 @@ export default function ContentGenerator({ onNavigate, user }) {
       setGenerationHistory(updatedHistory);
       localStorage.setItem('incdrops_history', JSON.stringify(updatedHistory));
     } else {
-      // This will now show the specific error, e.g., "Missing API key"
+      // This will show the error from your old function
       alert(result.error || 'Error generating ideas. Please try again.');
     }
   };
@@ -256,9 +237,6 @@ export default function ContentGenerator({ onNavigate, user }) {
     setSavedIdeas(updated);
     localStorage.setItem('incdrops_saved', JSON.stringify(updated));
   };
-
-  // ... all your other functions (exportToTXT, exportToCSV, etc.) are fine ...
-  // ... so I am including them all below ...
 
   const exportToTXT = () => {
     if (savedIdeas.length === 0) return;
@@ -300,10 +278,8 @@ export default function ContentGenerator({ onNavigate, user }) {
   const exportToCSV = () => {
     if (savedIdeas.length === 0) return;
     
-    // CSV headers
     let csv = 'Title,Description,Platforms,Hashtags,Type\n';
     
-    // Add each idea as a row
     savedIdeas.forEach(idea => {
       const title = `"${(idea.title || '').replace(/"/g, '""')}"`;
       const description = `"${(idea.description || '').replace(/"/g, '""')}"`;
@@ -345,7 +321,6 @@ export default function ContentGenerator({ onNavigate, user }) {
     URL.revokeObjectURL(url);
   };
 
-  // Export current ideas (not saved)
   const exportCurrentIdeas = (format) => {
     if (ideas.length === 0) return;
     
@@ -404,7 +379,6 @@ export default function ContentGenerator({ onNavigate, user }) {
     }
   };
 
-  // ... The rest of your file (the JSX) is perfect, so it's all here ...
   return (
     <div className="min-h-screen bg-black text-white relative">
       <div className="relative z-10">
@@ -434,7 +408,7 @@ export default function ContentGenerator({ onNavigate, user }) {
             </button>
             <button
               onClick={() => setShowStats(true)}
-              className="px-4 py-2 rounded-lg bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 text-gray-900 font-semibold hover:scale-105 transition-all duration-300 shadow-xl shadow-gray-700/50 hover:shadow-2xl hover:shadow-gray-600/5g"
+              className="px-4 py-2 rounded-lg bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 text-gray-900 font-semibold hover:scale-105 transition-all duration-300 shadow-xl shadow-gray-700/50 hover:shadow-2xl hover:shadow-gray-600/50"
             >
               Stats
             </button>
