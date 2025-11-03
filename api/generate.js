@@ -27,27 +27,27 @@ export default async function handler(req, res) {
     // --- 3. Build the Prompt ---
     // This is the prompt we send to Google AI
     const prompt = `
-      You are an expert content marketing strategist. Generate 8 content ideas based on the following inputs.
-      Return the ideas as a valid JSON array. Do NOT include any text before or after the JSON array.
+  You are an expert content marketing strategist. Generate 5 content ideas based on the following inputs.
+  Return the ideas as a valid JSON array. Do NOT include any text before or after the JSON array.
 
-      Each idea in the array should be an object with this exact structure:
-      {
-        "title": "A catchy, short title for the content",
-        "description": "A 2-3 sentence detailed description of the content idea, explaining the angle and value.",
-        "platforms": ["Platform 1", "Platform 2"],
-        "hashtags": ["#hashtag1", "#hashtag2"],
-        "type": "${contentType || 'social'}"
-      }
+  Each idea in the array should be an object with this exact structure:
+  {
+    "title": "A catchy, short title for the content",
+    "description": "A 2-3 sentence detailed description of the content idea, explaining the angle and value.",
+    "platforms": ["Platform 1", "Platform 2"],
+    "hashtags": ["#hashtag1", "#hashtag2"],
+    "type": "${contentType || 'social'}"
+  }
 
-      Here is the user's data:
-      - Industry: ${industry || 'general business'}
-      - Target Audience: ${targetAudience || 'general audience'}
-      - Services/Products: ${services || 'various products'}
-      - Content Type: ${contentType || 'social post'}
-    `;
+  Here is the user's data:
+  - Industry: ${industry || 'general business'}
+  - Target Audience: ${targetAudience || 'general audience'}
+  - Services/Products: ${services || 'various products'}
+  - Content Type: ${contentType || 'social post'}
+`;
 
     // --- 4. Call Google AI ---
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
