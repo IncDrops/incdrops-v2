@@ -18,20 +18,37 @@ import CookiePolicy from './CookiePolicy';
 import Security from './Security';
 import GDPR from './GDPR';
 
-export default function App() {
-  const [page, setPage] = useState('landing'); // 'landing' | 'generator' | 'pricing' | 'terms' | 'privacy' | 'auth' | 'account' | 'api-access' | 'integrations' | 'roadmap' | 'help-center' | 'documentation' | 'contact-us' | 'status-page' | 'community' | 'cookie-policy' | 'security' | 'gdpr'
-  const [user, setUser] = useState(null);
+import { auth, db } from './firebase'; // Import db
+import { signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore'; // Import Firestore doc functions
 
-  // Check if user is logged in on mount
+export default function App() {
+  const [page, setPage] = useState('landing');
+  const [user, setUser] = useState(null); // This will hold the full user profile from Firestore
+
+  // --- THIS FUNCTION IS NOW SMARTER ---
+  // It checks for a local user, then verifies and gets fresh data from Firestore
   useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem('incdrops_user') || 'null');
-    if (userData) {
-      setUser(userData);
-    }
+    const checkUser = async () => {
+      const localUser = JSON.parse(localStorage.getItem('incdrops_user') || 'null');
+      if (localUser && localUser.id) {
+        // We have a user in localStorage. Let's get their REAL data from Firestore
+        const userDocRef = doc(db, 'users', localUser.id);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          // User exists, save their DB data to our app state
+          setUser(userDocSnap.data());
+        } else {
+          // This user is in localStorage but not in our DB. Log them out.
+          handleLogout();
+        }
+      }
+    };
+    checkUser();
   }, []);
 
   const handleNavigate = (targetPage) => {
-    // Protect generator and account pages - require authentication
     if ((targetPage === 'generator' || targetPage === 'account') && !user) {
       setPage('auth');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -42,21 +59,48 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleLogin = (userData) => {
-    setUser(userData);
+  // --- THIS FUNCTION IS NOW ASYNC AND FETCHES FROM DB ---
+  const handleLogin = async (authUserData) => {
+    // 1. Get the user's profile from Firestore
+    const userDocRef = doc(db, 'users', authUserData.uid);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (userDocSnap.exists()) {
+      // 2. User profile exists, save it to state
+      const userData = userDocSnap.data();
+      setUser(userData);
+      
+      // 3. Save to localStorage (for persistence on refresh)
+      localStorage.setItem('incdrops_user', JSON.stringify(userData));
+      localStorage.setItem('incdrops_tier', userData.tier);
+      
+      // 4. Redirect to generator
+      setPage('generator');
+    } else {
+      // This should not happen if signup is correct, but it's a good safety check
+      console.error("No user profile found in database!");
+      // We can still log them in with basic info, but 'tier' will be missing
+      setUser({ id: authUserData.uid, email: authUserData.email, name: authUserData.displayName });
+      setPage('generator');
+    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth); 
+    } catch (error) {
+      console.error("Error signing out: ", error);
+    }
     setUser(null);
     localStorage.removeItem('incdrops_user');
+    localStorage.removeItem('incdrops_tier'); // Also remove tier
   };
 
-  // Lightweight hash-based routing so refresh/back/forward work
+  // This hash-based routing is great
   useEffect(() => {
     const onHashChange = () => {
       const hash = window.location.hash.replace('#', '');
       if (['generator', 'landing', 'pricing', 'terms', 'privacy', 'auth', 'account', 'api-access', 'integrations', 'roadmap', 'help-center', 'documentation', 'contact-us', 'status-page', 'community', 'cookie-policy', 'security', 'gdpr'].includes(hash)) {
-        // Check if trying to access protected pages without being logged in
         if ((hash === 'generator' || hash === 'account') && !user) {
           setPage('auth');
         } else {
@@ -64,13 +108,12 @@ export default function App() {
         }
       }
     };
-    onHashChange(); // initialize from current hash
+    onHashChange();
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, [user]);
 
   useEffect(() => {
-    // keep the URL in sync so you can deep-link to #generator / #pricing / #terms / #privacy
     if (page) window.location.hash = page;
   }, [page]);
 
