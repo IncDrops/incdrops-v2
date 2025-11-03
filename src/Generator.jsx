@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Sparkles, Zap, TrendingUp, Users, Copy, Heart, RefreshCw, X, Filter, Loader2, Clock, Mic, Image, Video, FileText, Mail, ArrowLeft, Download, User } from 'lucide-react';
+import { GoogleGenerativeAI } from '@google/generative-ai'; // Your import is correct
+
+// Get the VITE key from environment variables
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const genAI = new GoogleGenerativeAI(API_KEY);
 
 export default function ContentGenerator({ onNavigate, user }) {
   const [formData, setFormData] = useState({
@@ -9,7 +14,7 @@ export default function ContentGenerator({ onNavigate, user }) {
     contentType: 'social',
   });
 
-  const [ideas, setIdeas] = useState([]);
+  const [ideas, setIdeas] =useState([]);
   const [loading, setLoading] = useState(false);
   const [currentTier, setCurrentTier] = useState('free'); // free, basic, pro, business
   const [usage, setUsage] = useState({ month: '', count: 0 }); // monthly usage tracker
@@ -120,57 +125,77 @@ export default function ContentGenerator({ onNavigate, user }) {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  // ------------------------------------------------------------------
+  //  THIS IS THE NEW, REPLACED FUNCTION
+  // ------------------------------------------------------------------
   const callGeminiAPI = async (formData) => {
-    // This function now calls YOUR backend (/api/generate), not Google.
-    // The API key is no longer exposed here.
+    // 1. Safety check for the API key
+    if (!API_KEY) {
+      return { success: false, error: "API Key is missing. Add VITE_GEMINI_API_KEY to your Vercel project settings." };
+    }
+    
+    // 2. Get form data
+    const { industry, targetAudience, services, contentType } = formData;
 
-    try {
-      // We send our form data to our own backend route
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData) // Send the form data to your API route
-      });
+    // 3. Build the Prompt (now with 5 ideas)
+    const prompt = `
+      You are an expert content marketing strategist. Generate 5 content ideas based on the following inputs.
+      Return the ideas as a valid JSON array. Do NOT include any text before or after the JSON array.
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        // Show the error from our backend
-        throw new Error(errorData.error || `Backend API Error: ${res.status}`);
+      Each idea in the array should be an object with this exact structure:
+      {
+        "title": "A catchy, short title for the content",
+        "description": "A 2-3 sentence detailed description of the content idea, explaining the angle and value.",
+        "platforms": ["Platform 1", "Platform 2"],
+        "hashtags": ["#hashtag1", "#hashtag2"],
+        "type": "${contentType || 'social'}"
       }
 
-      // The backend forwards Google's response, so we get it here
-      const data = await res.json();
+      Here is the user's data:
+      - Industry: ${industry || 'general business'}
+      - Target Audience: ${targetAudience || 'general audience'}
+      - Services/Products: ${services || 'various products'}
+      - Content Type: ${contentType || 'social post'}
+    `;
 
-      // The rest of your parsing logic remains exactly the same!
-      const text =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-        data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') ||
-        '';
+    try {
+      // 4. Call Google AI
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
 
+      // 5. Parse the JSON (same as your original logic)
       let parsed = [];
       try {
         const match = text.match(/\[[\s\S]*\]/);
         parsed = match ? JSON.parse(match[0]) : [];
       } catch {
-        // Your fallback logic is good to keep
-        parsed = Array.from({ length: 8 }).map((_, i) => ({
+        console.error("Failed to parse JSON, using fallback.");
+        // Fallback logic
+        parsed = Array.from({ length: 5 }).map((_, i) => ({
           id: `${Date.now()}-${i}`,
           title: `Idea ${i + 1} for ${formData.industry || 'your brand'}`,
           description: `A quick concept targeting ${formData.targetAudience || 'your audience'}.`,
-          platforms: ['Instagram', 'TikTok', 'LinkedIn'].slice(0, (i % 3) + 1),
-          hashtags: ['#growth', '#brand', '#content'].slice(0, (i % 3) + 1),
+          platforms: ['Instagram', 'TikTok'].slice(0, (i % 2) + 1),
+          hashtags: ['#growth', '#brand'].slice(0, (i % 2) + 1),
           type: formData.contentType || 'social',
         }));
       }
 
       const withIds = parsed.map((it, i) => ({ ...it, id: it.id || `${Date.now()}-${i}` }));
       return { success: true, ideas: withIds };
+
     } catch (error) {
-      console.error('Backend API Error:', error);
-      // We pass the error message to the handleSubmit function
-      return { success: false, error: error.message };
+      console.error('Frontend Google AI Error:', error);
+      return { success: false, error: "Failed to generate ideas. The API key might be invalid or restricted." };
     }
   };
+  // ------------------------------------------------------------------
+  //  END OF REPLACED FUNCTION
+  // ------------------------------------------------------------------
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -232,7 +257,9 @@ export default function ContentGenerator({ onNavigate, user }) {
     localStorage.setItem('incdrops_saved', JSON.stringify(updated));
   };
 
-  // Export functions
+  // ... all your other functions (exportToTXT, exportToCSV, etc.) are fine ...
+  // ... so I am including them all below ...
+
   const exportToTXT = () => {
     if (savedIdeas.length === 0) return;
     
@@ -377,6 +404,7 @@ export default function ContentGenerator({ onNavigate, user }) {
     }
   };
 
+  // ... The rest of your file (the JSX) is perfect, so it's all here ...
   return (
     <div className="min-h-screen bg-black text-white relative">
       <div className="relative z-10">
@@ -406,7 +434,7 @@ export default function ContentGenerator({ onNavigate, user }) {
             </button>
             <button
               onClick={() => setShowStats(true)}
-              className="px-4 py-2 rounded-lg bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 text-gray-900 font-semibold hover:scale-105 transition-all duration-300 shadow-xl shadow-gray-700/50 hover:shadow-2xl hover:shadow-gray-600/50"
+              className="px-4 py-2 rounded-lg bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 text-gray-900 font-semibold hover:scale-105 transition-all duration-300 shadow-xl shadow-gray-700/50 hover:shadow-2xl hover:shadow-gray-600/5g"
             >
               Stats
             </button>
