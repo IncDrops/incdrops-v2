@@ -1,19 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Mail, CreditCard, Crown, Check, AlertCircle, LogOut } from 'lucide-react';
+import { ArrowLeft, User, Mail, CreditCard, Crown, Check, AlertCircle, LogOut, Loader2 } from 'lucide-react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { loadStripe } from '@stripe/stripe-js';
+import { auth, db } from './firebase'; // Import auth and db
+import { updateProfile } from 'firebase/auth';
+import { doc, updateDoc } from 'firebase/firestore';
+
+// --- Stripe Public Key (make sure it's in your .env file!) ---
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+
+// --- Your Stripe Price IDs ---
+const priceIDs = {
+  basic: 'price_1SPUKaHK4G9ZDA0FqdzT1Hae',
+  pro: 'price_1SPUM6HK4G9ZDA0FWqZJOLVH',
+  business: 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt' // I added your Business ID!
+};
 
 export default function AccountSettings({ onNavigate, onLogout }) {
   const [user, setUser] = useState(null);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '' });
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [selectedTier, setSelectedTier] = useState('');
+  
+  // --- New Stripe-related state ---
+  const [loadingPlan, setLoadingPlan] = useState(null); // 'basic', 'pro', etc.
+  const [error, setError] = useState('');
+  const [saveLoading, setSaveLoading] = useState(false);
 
   useEffect(() => {
+    // We get the user object from App.jsx, but localStorage is a good fallback
     const userData = JSON.parse(localStorage.getItem('incdrops_user') || 'null');
     if (userData) {
       setUser(userData);
       setFormData({ name: userData.name, email: userData.email });
     } else {
+      // If no user at all, go to auth
       onNavigate('auth');
     }
   }, [onNavigate]);
@@ -46,52 +66,77 @@ export default function AccountSettings({ onNavigate, onLogout }) {
     }
   ];
 
-  const handleSave = () => {
-    const users = JSON.parse(localStorage.getItem('incdrops_users') || '[]');
-    const updatedUsers = users.map(u => 
-      u.id === user.id ? { ...u, name: formData.name, email: formData.email } : u
-    );
-    localStorage.setItem('incdrops_users', JSON.stringify(updatedUsers));
+  // --- UPGRADED handleSave to use Firebase ---
+  const handleSave = async () => {
+    setSaveLoading(true);
+    setError('');
     
-    const updatedUser = { ...user, name: formData.name, email: formData.email };
-    setUser(updatedUser);
-    localStorage.setItem('incdrops_user', JSON.stringify(updatedUser));
-    setEditing(false);
+    try {
+      // 1. Update the Firebase Auth profile
+      if (auth.currentUser && auth.currentUser.displayName !== formData.name) {
+        await updateProfile(auth.currentUser, {
+          displayName: formData.name
+        });
+      }
+
+      // 2. Update the Firestore database document
+      const userDocRef = doc(db, 'users', user.id);
+      await updateDoc(userDocRef, {
+        name: formData.name
+      });
+
+      // 3. Update local state and localStorage
+      const updatedUser = { ...user, name: formData.name };
+      setUser(updatedUser);
+      localStorage.setItem('incdrops_user', JSON.stringify(updatedUser));
+      
+      setEditing(false);
+
+    } catch (err) {
+      console.error("Error updating profile:", err);
+      setError("Failed to update profile. Please try again.");
+    } finally {
+      setSaveLoading(false);
+    }
   };
 
-  const handleUpgrade = (tierId) => {
-    setSelectedTier(tierId);
-    setShowUpgradeModal(true);
+  // --- NEW Stripe Checkout Function ---
+  const redirectToCheckout = async (priceId) => {
+    if (!user) {
+      onNavigate('auth');
+      return;
+    }
+
+    setLoadingPlan(priceId);
+    setError('');
+
+    try {
+      const functions = getFunctions();
+      const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
+
+      const { data } = await createCheckoutSession({ priceId: priceId });
+      
+      const stripe = await stripePromise;
+      await stripe.redirectToCheckout({ sessionId: data.id });
+
+    } catch (err) {
+      console.error("Stripe checkout error:", err);
+      setError('An error occurred. Please try again.');
+      setLoadingPlan(null);
+    }
   };
 
-  const confirmUpgrade = () => {
-    // Update user tier
-    const users = JSON.parse(localStorage.getItem('incdrops_users') || '[]');
-    const updatedUsers = users.map(u => 
-      u.id === user.id ? { ...u, tier: selectedTier } : u
-    );
-    localStorage.setItem('incdrops_users', JSON.stringify(updatedUsers));
-    
-    const updatedUser = { ...user, tier: selectedTier };
-    setUser(updatedUser);
-    localStorage.setItem('incdrops_user', JSON.stringify(updatedUser));
-    localStorage.setItem('incdrops_tier', selectedTier);
-    
-    setShowUpgradeModal(false);
-    setSelectedTier('');
-  };
-
+  // --- UPGRADED handleLogout ---
   const handleLogout = () => {
-    localStorage.removeItem('incdrops_user');
-    onLogout();
-    onNavigate('landing');
+    onLogout(); // This calls the function from App.jsx (which signs out of Firebase)
+    onNavigate('landing'); // This sends the user home
   };
 
   if (!user) return null;
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Navigation */}
+      {/* Navigation (NOW USES THE CORRECT LOGOUT) */}
       <nav className="border-b border-gray-800 backdrop-blur-md sticky top-0 z-40 bg-black/80">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <button
@@ -119,9 +164,11 @@ export default function AccountSettings({ onNavigate, onLogout }) {
         <h2 className="text-4xl font-bold mb-8 bg-gradient-to-r from-gray-300 via-gray-100 to-gray-400 bg-clip-text text-transparent">
           Account Settings
         </h2>
+        
+        {error && <p className="text-red-500 mb-4">{error}</p>}
 
         <div className="space-y-6">
-          {/* Profile Section */}
+          {/* Profile Section (NOW USES FIREBASE) */}
           <div className="bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 rounded-2xl p-8 shadow-xl">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-gray-900">Profile Information</h3>
@@ -153,12 +200,15 @@ export default function AccountSettings({ onNavigate, onLogout }) {
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">Email</label>
                 {editing ? (
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/30 border border-gray-600 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  />
+                  <>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      disabled // Disabling email change as it requires re-authentication
+                      className="w-full px-4 py-3 bg-white/20 border border-gray-600 rounded-lg text-gray-700 cursor-not-allowed"
+                    />
+                    <p className="text-xs text-gray-700 mt-1">Changing email requires re-authentication (coming soon).</p>
+                  </>
                 ) : (
                   <p className="text-gray-800 text-lg">{user.email}</p>
                 )}
@@ -179,9 +229,10 @@ export default function AccountSettings({ onNavigate, onLogout }) {
                 <div className="flex gap-3 pt-4">
                   <button
                     onClick={handleSave}
-                    className="px-6 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300"
+                    disabled={saveLoading}
+                    className="px-6 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 flex items-center justify-center"
                   >
-                    Save Changes
+                    {saveLoading ? <Loader2 className="animate-spin" size={20} /> : 'Save Changes'}
                   </button>
                   <button
                     onClick={() => {
@@ -197,7 +248,7 @@ export default function AccountSettings({ onNavigate, onLogout }) {
             </div>
           </div>
 
-          {/* Current Plan Section */}
+          {/* Current Plan Section (NOW USES STRIPE) */}
           <div className="bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 rounded-2xl p-8 shadow-xl">
             <h3 className="text-2xl font-bold text-gray-900 mb-6">Current Subscription</h3>
             <div className="flex items-center justify-between">
@@ -209,19 +260,21 @@ export default function AccountSettings({ onNavigate, onLogout }) {
                 <p className="text-gray-800">
                   {tiers.find(t => t.id === user.tier)?.features.length} features included
                 </p>
+                {/* ^^^ THIS IS THE FIXED LINE. It's now </p> ^^^ */}
               </div>
               {user.tier !== 'business' && (
                 <button
-                  onClick={() => handleUpgrade(user.tier === 'free' ? 'basic' : user.tier === 'basic' ? 'pro' : 'business')}
-                  className="px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105"
+                  onClick={() => redirectToCheckout(priceIDs.pro)} // Default to Pro
+                  disabled={loadingPlan === priceIDs.pro}
+                  className="px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 flex items-center justify-center"
                 >
-                  Upgrade Plan
+                  {loadingPlan === priceIDs.pro ? <Loader2 className="animate-spin" size={20} /> : 'Upgrade Plan'}
                 </button>
               )}
             </div>
           </div>
 
-          {/* All Plans */}
+          {/* All Plans (NOW USES STRIPE) */}
           <div>
             <h3 className="text-2xl font-bold text-white mb-6">All Plans</h3>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -240,7 +293,7 @@ export default function AccountSettings({ onNavigate, onLogout }) {
                     </div>
                   )}
                   {tier.id === user.tier && (
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gray-900 px-4 py-1 rounded-full text-sm font-semibold text-white">
+                    <div className="absolute -top-4 left-1/Modular -translate-x-1/2 bg-gray-900 px-4 py-1 rounded-full text-sm font-semibold text-white">
                       CURRENT PLAN
                     </div>
                   )}
@@ -260,12 +313,26 @@ export default function AccountSettings({ onNavigate, onLogout }) {
                     ))}
                   </ul>
 
-                  {tier.id !== user.tier && (
+                  {tier.id !== 'free' && tier.id !== user.tier && (
                     <button
-                      onClick={() => handleUpgrade(tier.id)}
+                      onClick={() => redirectToCheckout(priceIDs[tier.id])}
+                      disabled={loadingPlan === priceIDs[tier.id]}
+                      className="w-full py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 flex items-center justify-center"
+                    >
+                      {loadingPlan === priceIDs[tier.id] ? (
+                        <Loader2 className="animate-spin" size={20} />
+                      ) : (
+                        tier.price > tiers.find(t => t.id === user.tier).price ? 'Upgrade' : 'Downgrade'
+                      )}
+                    </button>
+                  )}
+                  {tier.id === 'free' && tier.id !== user.tier && (
+                    <button
+                      // onClick={() => redirectToCheckout(priceIDs.free)} // You'll need to handle downgrades/cancellations
+                      onClick={() => alert("Please manage your subscription in your account.")} // Placeholder
                       className="w-full py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300"
                     >
-                      {tier.price > tiers.find(t => t.id === user.tier).price ? 'Upgrade' : 'Downgrade'}
+                      Downgrade
                     </button>
                   )}
                 </div>
@@ -274,48 +341,6 @@ export default function AccountSettings({ onNavigate, onLogout }) {
           </div>
         </div>
       </div>
-
-      {/* Upgrade Modal */}
-      {showUpgradeModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setShowUpgradeModal(false)}>
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-8" onClick={(e) => e.stopPropagation()}>
-            <div className="text-center mb-6">
-              <AlertCircle className="mx-auto mb-4 text-gray-400" size={48} />
-              <h3 className="text-2xl font-bold text-gray-100 mb-2">Confirm Subscription Change</h3>
-              <p className="text-gray-400">
-                Change your plan to <span className="font-bold capitalize text-white">{tiers.find(t => t.id === selectedTier)?.name}</span>
-              </p>
-              <p className="text-gray-400 mt-2">
-                Price: <span className="font-bold text-white">${tiers.find(t => t.id === selectedTier)?.price}/month</span>
-              </p>
-            </div>
-
-            <div className="bg-gray-800 rounded-lg p-4 mb-6">
-              <p className="text-sm text-gray-400 mb-2">Note: This is a demo application. In production:</p>
-              <ul className="text-sm text-gray-400 space-y-1 ml-4">
-                <li>• Payment processing would be handled securely</li>
-                <li>• Changes take effect immediately</li>
-                <li>• You'll receive a confirmation email</li>
-              </ul>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={confirmUpgrade}
-                className="flex-1 py-3 bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 text-gray-900 rounded-lg font-semibold transition-all duration-300 hover:scale-105"
-              >
-                Confirm Change
-              </button>
-              <button
-                onClick={() => setShowUpgradeModal(false)}
-                className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-semibold transition-all duration-300"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
