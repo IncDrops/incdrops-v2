@@ -10,9 +10,9 @@ export default function IncDropsLanding({ onNavigate, user }) {
   
   // Test price IDs - update these to live IDs when going to production
   const priceIDs = {
-    basic: 'price_1SPUR3HK4G9ZDA0FoWrY7Qak',
-    pro: 'price_1SPdMsHK4G9ZDA0FGibpxGrG',
-    business: 'price_1SPdNCHK4G9ZDA0Fjay2IoFD'
+    basic: 'price_1SPUKaHK4G9ZDA0FqdzT1Hae',
+    pro: 'price_1SPUM6HK4G9ZDA0FWqZJOLVH',
+    business: 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt'
   };
   
   // Function to redirect to Stripe Checkout
