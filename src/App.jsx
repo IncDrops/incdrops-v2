@@ -111,7 +111,7 @@ export default function App() {
       {page === 'generator' && <Generator onNavigate={handleNavigate} user={user} />}
       {page === 'pricing' && <Pricing onNavigate={handleNavigate} user={user} />}
       {page === 'auth' && <AuthPage onNavigate={handleNavigate} onLogin={handleLogin} />}
-      {page === 'account' && <AccountSettings onNavigate={handleNavigate} onLogout={handleLogout} />}
+      {page === 'account' && <AccountSettings onNavigate={handleNavigate} onLogout={handleLogout} user={user} />}
       {page === 'terms' && <TermsOfService onNavigate={handleNavigate} />}
       {/* --- THIS IS THE FIXED LINE --- */}
       {page === 'privacy' && <PrivacyPolicy onNavigate={handleNavigate} />}

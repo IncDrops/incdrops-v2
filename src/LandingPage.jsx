@@ -1,10 +1,48 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Zap, TrendingUp, Users, ArrowRight, Check, Target, Rocket, Shield, Clock, Layers, Twitter, Github, Linkedin, ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
+import { Sparkles, Zap, TrendingUp, Users, ArrowRight, Check, Target, Rocket, Shield, Clock, Layers, Twitter, Github, Linkedin, ChevronLeft, ChevronRight, Menu, X, Loader2 } from 'lucide-react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 export default function IncDropsLanding({ onNavigate, user }) {
   const [scrollY, setScrollY] = useState(0);
   const [visibleSections, setVisibleSections] = useState(new Set());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState(null);
+  
+  // Test price IDs - update these to live IDs when going to production
+  const priceIDs = {
+    basic: 'price_1SPUR3HK4G9ZDA0FoWrY7Qak',
+    pro: 'price_1SPdMsHK4G9ZDA0FGibpxGrG',
+    business: 'price_1SPdNCHK4G9ZDA0Fjay2IoFD'
+  };
+  
+  // Function to redirect to Stripe Checkout
+  const redirectToCheckout = async (priceId, tierName) => {
+    if (!user) {
+      onNavigate('auth');
+      return;
+    }
+
+    setLoadingPlan(tierName);
+
+    try {
+      const functions = getFunctions();
+      const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
+
+      const { data } = await createCheckoutSession({ priceId: priceId });
+      
+      if (data && data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("Could not retrieve checkout URL.");
+      }
+
+    } catch (err) {
+      console.error("Stripe checkout error:", err);
+      alert('An error occurred. Please try again.');
+      setLoadingPlan(null);
+    }
+  };
+  
   const sectionRefs = useRef([]);
   const trackRef = useRef(null);
   const frameRef = useRef(null);
@@ -362,7 +400,13 @@ export default function IncDropsLanding({ onNavigate, user }) {
                 <li className="flex items-start text-gray-800"><Check className="mr-2 mt-1 flex-shrink-0 text-gray-700" size={20} /><span>Save favorites</span></li>
                 <li className="flex items-start text-gray-800"><Check className="mr-2 mt-1 flex-shrink-0 text-gray-700" size={20} /><span>Export to CSV/TXT</span></li>
               </ul>
-              <button onClick={() => onNavigate(user ? 'generator' : 'auth')} className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105">Start Basic</button>
+              <button 
+                onClick={() => redirectToCheckout(priceIDs.basic, 'basic')}
+                disabled={loadingPlan === 'basic'}
+                className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 flex items-center justify-center"
+              >
+                {loadingPlan === 'basic' ? <Loader2 className="animate-spin" size={20} /> : 'Start Basic'}
+              </button>
             </div>
             
             <div className="bg-gradient-to-br from-gray-300 via-gray-200 to-gray-400 rounded-2xl p-8 relative scale-105 shadow-2xl shadow-gray-600/70">
@@ -380,7 +424,13 @@ export default function IncDropsLanding({ onNavigate, user }) {
                 <li className="flex items-start text-gray-800"><Check className="mr-2 mt-1 flex-shrink-0 text-gray-700" size={20} /><span>Advanced filters</span></li>
                 <li className="flex items-start text-gray-800"><Check className="mr-2 mt-1 flex-shrink-0 text-gray-700" size={20} /><span>Generation history</span></li>
               </ul>
-              <button onClick={() => onNavigate(user ? 'generator' : 'auth')} className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105">Start Pro</button>
+              <button 
+                onClick={() => redirectToCheckout(priceIDs.pro, 'pro')}
+                disabled={loadingPlan === 'pro'}
+                className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 flex items-center justify-center"
+              >
+                {loadingPlan === 'pro' ? <Loader2 className="animate-spin" size={20} /> : 'Start Pro'}
+              </button>
             </div>
             
             <div className="bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 rounded-2xl p-8 shadow-xl shadow-gray-700/50 hover:shadow-2xl hover:shadow-gray-600/50 transition-all duration-300 hover:scale-105">
@@ -397,7 +447,13 @@ export default function IncDropsLanding({ onNavigate, user }) {
                 <li className="flex items-start text-gray-800"><Check className="mr-2 mt-1 flex-shrink-0 text-gray-700" size={20} /><span>API access</span></li>
                 <li className="flex items-start text-gray-800"><Check className="mr-2 mt-1 flex-shrink-0 text-gray-700" size={20} /><span>White-label exports</span></li>
               </ul>
-              <button className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105">Contact Sales</button>
+              <button 
+                onClick={() => redirectToCheckout(priceIDs.business, 'business')}
+                disabled={loadingPlan === 'business'}
+                className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 flex items-center justify-center"
+              >
+                {loadingPlan === 'business' ? <Loader2 className="animate-spin" size={20} /> : 'Start Business'}
+              </button>
             </div>
           </div>
         </div>

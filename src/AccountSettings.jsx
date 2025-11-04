@@ -3,7 +3,7 @@ import { ArrowLeft, User, Mail, CreditCard, Crown, Check, AlertCircle, LogOut, L
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { auth, db } from './firebase'; 
 import { updateProfile } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 
 // --- PASTE YOUR NEW TEST PRICE IDs HERE ---
 const priceIDs = {
@@ -12,7 +12,7 @@ const priceIDs = {
   business: 'price_1SPdNCHK4G9ZDA0Fjay2IoFD'
 };
 
-export default function AccountSettings({ onNavigate, onLogout }) {
+export default function AccountSettings({ onNavigate, onLogout, user: propUser }) {
   const [user, setUser] = useState(null);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '' });
@@ -22,14 +22,46 @@ export default function AccountSettings({ onNavigate, onLogout }) {
   const [saveLoading, setSaveLoading] = useState(false);
 
   useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem('incdrops_user') || 'null');
-    if (userData) {
-      setUser(userData);
-      setFormData({ name: userData.name, email: userData.email });
-    } else {
-      onNavigate('auth');
-    }
-  }, [onNavigate]);
+    const fetchUserData = async () => {
+      // First try to use the prop from App (which has fresh Firebase data)
+      if (propUser) {
+        setUser(propUser);
+        setFormData({ name: propUser.name, email: propUser.email });
+        return;
+      }
+
+      // Fallback: get from localStorage and fetch fresh data from Firebase
+      const localUser = JSON.parse(localStorage.getItem('incdrops_user') || 'null');
+      if (localUser && localUser.id) {
+        try {
+          const userDocRef = doc(db, 'users', localUser.id);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            const freshData = userDocSnap.data();
+            const userData = {
+              id: localUser.id,
+              ...freshData
+            };
+            setUser(userData);
+            setFormData({ name: userData.name, email: userData.email });
+            // Update localStorage with fresh data
+            localStorage.setItem('incdrops_user', JSON.stringify(userData));
+          } else {
+            onNavigate('auth');
+          }
+        } catch (err) {
+          console.error("Error fetching user data:", err);
+          setUser(localUser);
+          setFormData({ name: localUser.name, email: localUser.email });
+        }
+      } else {
+        onNavigate('auth');
+      }
+    };
+
+    fetchUserData();
+  }, [onNavigate, propUser]);
 
   const tiers = [
     {
