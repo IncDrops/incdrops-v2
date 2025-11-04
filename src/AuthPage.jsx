@@ -6,7 +6,7 @@ import {
   updateProfile
 } from "firebase/auth";
 import { auth, db } from './firebase'; 
-import { doc, setDoc } from "firebase/firestore"; 
+import { doc, setDoc, getDoc } from "firebase/firestore"; 
 
 export default function AuthPage({ onNavigate, onLogin }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -73,13 +73,29 @@ export default function AuthPage({ onNavigate, onLogin }) {
         const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
         const user = userCredential.user;
 
-        userData = {
-          id: user.uid,
-          email: user.email,
-          name: user.displayName || 'User', 
-          tier: user.tier || 'free', 
-          createdAt: user.metadata.creationTime
-        };
+        // Fetch user data from Firestore to get the current tier
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          const firestoreData = userDocSnap.data();
+          userData = {
+            id: user.uid,
+            email: user.email,
+            name: user.displayName || firestoreData.name || 'User',
+            tier: firestoreData.tier || 'free',
+            createdAt: user.metadata.creationTime
+          };
+        } else {
+          // Fallback if no Firestore document exists
+          userData = {
+            id: user.uid,
+            email: user.email,
+            name: user.displayName || 'User',
+            tier: 'free',
+            createdAt: user.metadata.creationTime
+          };
+        }
 
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
@@ -110,13 +126,10 @@ export default function AuthPage({ onNavigate, onLogin }) {
       setLoading(false);
       setShowSuccess(true); 
 
-      // --- THIS IS THE UPDATED LOGIC ---
+      // Redirect after brief success message
       setTimeout(() => {
-        localStorage.setItem('incdrops_user', JSON.stringify(userData));
-        localStorage.setItem('incdrops_tier', userData.tier);
-        onLogin(userData); // This now ALSO handles the redirect
-        // onNavigate('generator'); // <-- THIS LINE IS REMOVED
-      }, 1500); 
+        onLogin(userData); // This handles everything: state update, localStorage, and navigation
+      }, 1000); // Reduced from 1500ms to 1000ms for faster redirect 
 
     } catch (err) {
       setLoading(false); 

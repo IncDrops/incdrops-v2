@@ -56,29 +56,17 @@ export default function App() {
   };
 
   const handleLogin = async (authUserData) => {
-    // 1. Get the user's profile from Firestore
-    const userDocRef = doc(db, 'users', authUserData.uid);
-    const userDocSnap = await getDoc(userDocRef);
-
-    if (userDocSnap.exists()) {
-      // 2. User profile exists, save it to state
-      const userData = userDocSnap.data();
-      setUser(userData);
-      
-      // 3. Save to localStorage (for persistence on refresh)
-      localStorage.setItem('incdrops_user', JSON.stringify(userData));
-      localStorage.setItem('incdrops_tier', userData.tier);
-      
-      // 4. Redirect to generator (THIS IS THE FIX)
-      setPage('generator');
-    } else {
-      console.error("No user profile found in database!");
-      const minimalUserData = { id: authUserData.uid, email: authUserData.email, name: authUserData.displayName, tier: 'free', createdAt: new Date().toISOString() };
-      setUser(minimalUserData);
-      localStorage.setItem('incdrops_user', JSON.stringify(minimalUserData));
-      localStorage.setItem('incdrops_tier', 'free');
-      setPage('generator');
-    }
+    // The userData is already passed from AuthPage with all the info we need
+    // No need to fetch from Firestore again - just use it directly
+    setUser(authUserData);
+    
+    // Save to localStorage (for persistence on refresh)
+    localStorage.setItem('incdrops_user', JSON.stringify(authUserData));
+    localStorage.setItem('incdrops_tier', authUserData.tier || 'free');
+    
+    // Redirect to generator immediately
+    setPage('generator');
+    window.location.hash = 'generator';
   };
 
   const handleLogout = async () => {
