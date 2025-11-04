@@ -106,10 +106,10 @@ exports.stripeWebhook = onRequest({
       // 5. Determine the new tier based on Price ID
       let newTier = 'free'; // Default
       
-      // Match the Price IDs you gave me
-      if (priceId === 'price_1SPUKaHK4G9ZDA0FqdzT1Hae') newTier = 'basic';
-      if (priceId === 'price_1SPUM6HK4G9ZDA0FWqZJOLVH') newTier = 'pro';
-      if (priceId === 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt') newTier = 'business';
+      // LIVE Production Price IDs
+      if (priceId === 'price_1SPUKaHK4G9ZDA0FqdzT1Hae') newTier = 'basic';   // Basic $29/month
+      if (priceId === 'price_1SPUM6HK4G9ZDA0FWqZJOLVH') newTier = 'pro';      // Pro
+      if (priceId === 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt') newTier = 'business'; // Business
 
       try {
         // 6. Update the user's document in Firestore
