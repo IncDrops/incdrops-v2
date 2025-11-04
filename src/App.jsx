@@ -35,7 +35,12 @@ export default function App() {
         const userDocSnap = await getDoc(userDocRef);
 
         if (userDocSnap.exists()) {
-          setUser(userDocSnap.data());
+          const firestoreData = userDocSnap.data();
+          // Make sure to include the id field
+          setUser({
+            id: localUser.id,
+            ...firestoreData
+          });
         } else {
           handleLogout();
         }

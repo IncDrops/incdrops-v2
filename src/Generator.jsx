@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Sparkles, Zap, TrendingUp, Users, Copy, Heart, RefreshCw, X, Filter, Loader2, Clock, Mic, Image, Video, FileText, Mail, ArrowLeft, Download, User } from 'lucide-react';
+
 import { db } from './firebase';
 import { doc, updateDoc, increment } from 'firebase/firestore'; 
 
-export default function ContentGenerator({ onNavigate, user }) { 
+export default function ContentGenerator({ onNavigate, user }) { // 'user' prop is now our source of truth
   const [formData, setFormData] = useState({
     industry: '',
     targetAudience: '',
@@ -13,18 +14,19 @@ export default function ContentGenerator({ onNavigate, user }) {
 
   const [ideas, setIdeas] = useState([]);
   const [loading, setLoading] = useState(false);
+  
   const [currentTier, setCurrentTier] = useState('free');
   const [usage, setUsage] = useState({ month: '', count: 0 }); 
 
   const [generationHistory, setGenerationHistory] = useState([]);
   const [copiedId, setCopiedId] = useState(null);
   const [showSavedModal, setShowSavedModal] = useState(false);
-  const [savedIdeas, setSavedIdeas] = useState([]);
+  const [savedIdeas, setSavedIdeas] =useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [platformFilter, setPlatformFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('recent'); 
+  const [sortBy, setSortBy] = useState('recent');
   const [showStats, setShowStats] = useState(false);
 
   const tierLimits = {
@@ -40,23 +42,34 @@ export default function ContentGenerator({ onNavigate, user }) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   };
 
+  // --- THIS useEffect IS NOW FIXED ---
   useEffect(() => {
-    if (user) {
+    // THIS IS THE FIX: We wait for 'user' AND 'user.uid' to exist
+    // This stops the crash on line 51
+    if (user && user.uid) { 
+      // 1. Set the user's tier
       setCurrentTier(user.tier || 'free');
+
+      // 2. Set their usage count
       const mk = monthKey();
       const userUsage = user.usage || {}; 
       
       if (userUsage.month !== mk) {
+        // User's saved month is old, reset their count
         setUsage({ month: mk, count: 0 });
-        const userDocRef = doc(db, 'users', user.uid);
+        
+        // This was the line (51) that was crashing. It's now safe.
+        const userDocRef = doc(db, 'users', user.uid); 
         updateDoc(userDocRef, {
           usage: { month: mk, count: 0 }
         });
       } else {
+        // Usage month is current, load it
         setUsage(userUsage);
       }
     }
 
+    // 3. Load saved ideas & history from localStorage
     const savedStored = localStorage.getItem('incdrops_saved');
     if (savedStored) {
       try { setSavedIdeas(JSON.parse(savedStored)); } catch {}
@@ -65,7 +78,7 @@ export default function ContentGenerator({ onNavigate, user }) {
     if (historyStored) {
       try { setGenerationHistory(JSON.parse(historyStored)); } catch {}
     }
-  }, [user]); 
+  }, [user]); // This effect re-runs whenever the user object changes
 
   const stats = useMemo(() => {
     const totalGenerated = generationHistory.reduce((acc, h) => acc + (h.ideas?.length || 0), 0);
@@ -105,20 +118,17 @@ export default function ContentGenerator({ onNavigate, user }) {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  // ------------------------------------------------------------------
-  //  THIS IS THE NEW, MORE RELIABLE callGeminiAPI FUNCTION
-  // ------------------------------------------------------------------
+  // This is your working "flawless" API call, it needs no changes
   const callGeminiAPI = async (formData) => {
     const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
     if (!GEMINI_API_KEY) {
       alert('API Key is missing. Please add VITE_GEMINI_API_KEY to your Vercel project settings.');
       return { success: false, error: 'API key not configured' };
     }
-    const MODEL = 'gemini-2.0-flash-exp'; // Your working model
+    const MODEL = 'gemini-2.0-flash-exp'; 
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
     const { industry, targetAudience, services, contentType } = formData;
     
-    // --- 1. THE PROMPT IS NOW JSON-BASED ---
     const prompt = `
       You are an expert content marketing strategist. Generate 5 content ideas based on the following inputs.
       Return the ideas as a valid JSON array. Do NOT include any text before or after the JSON array.
@@ -140,7 +150,6 @@ export default function ContentGenerator({ onNavigate, user }) {
     `;
     
     try {
-      // Your working fetch call
       const response = await fetch(`${API_URL}?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,10 +162,8 @@ export default function ContentGenerator({ onNavigate, user }) {
       const data = await response.json();
       let text = data.candidates[0].content.parts[0].text;
 
-      // --- 2. THE PARSING IS NOW JSON-BASED ---
       let parsed = [];
       try {
-        // Find the JSON array in the response text
         const match = text.match(/\[[\s\S]*\]/); 
         if (match) {
           parsed = JSON.parse(match[0]);
@@ -165,7 +172,6 @@ export default function ContentGenerator({ onNavigate, user }) {
         }
       } catch (parseError) {
         console.error("Failed to parse JSON from AI, response was:", text);
-        // This is your fallback logic, which is great to keep!
         parsed = Array.from({ length: 5 }).map((_, i) => ({
           id: `${Date.now()}-${i}`,
           title: `Idea ${i + 1} for ${formData.industry || 'your brand'}`,
@@ -176,7 +182,6 @@ export default function ContentGenerator({ onNavigate, user }) {
         }));
       }
 
-      // Add the other properties your UI expects
       const ideas = parsed.map((it, i) => ({ 
           ...it, 
           id: it.id || `${Date.now()}-${i}`,
@@ -191,10 +196,8 @@ export default function ContentGenerator({ onNavigate, user }) {
       return { success: false, error: error.message };
     }
   };
-  // ------------------------------------------------------------------
-  //  END OF REPLACED FUNCTION
-  // ------------------------------------------------------------------
 
+  // This function is also now safe because 'user.uid' will exist
   const handleSubmit = async (e) => {
     e.preventDefault();
     const mk = monthKey();
@@ -209,17 +212,18 @@ export default function ContentGenerator({ onNavigate, user }) {
     }
 
     setLoading(true);
-    const result = await callGeminiAPI(formData); // This will now return the JSON-parsed ideas
+    const result = await callGeminiAPI(formData); 
     setLoading(false);
 
     if (result.success) {
-      setIdeas(result.ideas); // This should now have ideas
+      setIdeas(result.ideas); 
       
       const newUsageCount = usage.count + 1;
       const newUsage = { month: mk, count: newUsageCount };
       setUsage(newUsage);
 
-      if (user) {
+      // This is safe now
+      if (user && user.uid) { 
         const userDocRef = doc(db, 'users', user.uid);
         updateDoc(userDocRef, {
           "usage.month": mk,
@@ -241,6 +245,8 @@ export default function ContentGenerator({ onNavigate, user }) {
       alert(result.error || 'Error generating ideas. Please try again.');
     }
   };
+
+  // --- ALL OTHER FUNCTIONS AND JSX ARE UNCHANGED ---
 
   const copyToClipboard = (idea) => {
     const text = `${idea.title}\n\n${idea.description}\n\nPlatforms: ${(idea.platforms || []).join(', ')}\n\nHashtags: ${(idea.hashtags || []).join(' ')}`;
@@ -264,8 +270,6 @@ export default function ContentGenerator({ onNavigate, user }) {
     localStorage.setItem('incdrops_saved', JSON.stringify(updated));
   };
 
-  // --- ALL YOUR OTHER FUNCTIONS AND JSX ARE UNCHANGED ---
-  
   const exportToTXT = () => {
     if (savedIdeas.length === 0) return;
     let content = '====================================\n';
@@ -628,6 +632,7 @@ export default function ContentGenerator({ onNavigate, user }) {
         </div>
       </div>
 
+      {/* All your modals (Saved, History, Stats) are unchanged and fine */}
       {showSavedModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setShowSavedModal(false)}>
           <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>

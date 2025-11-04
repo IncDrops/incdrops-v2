@@ -84,7 +84,7 @@ export default function AuthPage({ onNavigate, onLogin }) {
             email: user.email,
             name: user.displayName || firestoreData.name || 'User',
             tier: firestoreData.tier || 'free',
-            createdAt: user.metadata.creationTime
+            createdAt: firestoreData.createdAt || new Date().toISOString()
           };
         } else {
           // Fallback if no Firestore document exists
@@ -93,7 +93,7 @@ export default function AuthPage({ onNavigate, onLogin }) {
             email: user.email,
             name: user.displayName || 'User',
             tier: 'free',
-            createdAt: user.metadata.creationTime
+            createdAt: new Date().toISOString()
           };
         }
 
@@ -119,7 +119,7 @@ export default function AuthPage({ onNavigate, onLogin }) {
           email: user.email,
           name: formData.name,
           tier: 'free', 
-          createdAt: user.metadata.creationTime
+          createdAt: new Date().toISOString()
         };
       }
 
