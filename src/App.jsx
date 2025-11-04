@@ -18,29 +18,25 @@ import CookiePolicy from './CookiePolicy';
 import Security from './Security';
 import GDPR from './GDPR';
 
-import { auth, db } from './firebase'; // Import db
+// --- Imports for Firebase ---
+import { auth, db } from './firebase';
 import { signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore'; // Import Firestore doc functions
+import { doc, getDoc } from 'firebase/firestore'; 
 
 export default function App() {
   const [page, setPage] = useState('landing');
-  const [user, setUser] = useState(null); // This will hold the full user profile from Firestore
+  const [user, setUser] = useState(null); 
 
-  // --- THIS FUNCTION IS NOW SMARTER ---
-  // It checks for a local user, then verifies and gets fresh data from Firestore
   useEffect(() => {
     const checkUser = async () => {
       const localUser = JSON.parse(localStorage.getItem('incdrops_user') || 'null');
       if (localUser && localUser.id) {
-        // We have a user in localStorage. Let's get their REAL data from Firestore
         const userDocRef = doc(db, 'users', localUser.id);
         const userDocSnap = await getDoc(userDocRef);
 
         if (userDocSnap.exists()) {
-          // User exists, save their DB data to our app state
           setUser(userDocSnap.data());
         } else {
-          // This user is in localStorage but not in our DB. Log them out.
           handleLogout();
         }
       }
@@ -59,7 +55,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // --- THIS FUNCTION IS NOW ASYNC AND FETCHES FROM DB ---
+  // --- THIS IS THE FIXED FUNCTION ---
   const handleLogin = async (authUserData) => {
     // 1. Get the user's profile from Firestore
     const userDocRef = doc(db, 'users', authUserData.uid);
@@ -74,16 +70,18 @@ export default function App() {
       localStorage.setItem('incdrops_user', JSON.stringify(userData));
       localStorage.setItem('incdrops_tier', userData.tier);
       
-      // 4. Redirect to generator
+      // 4. Redirect to generator (THIS IS THE FIX)
       setPage('generator');
     } else {
-      // This should not happen if signup is correct, but it's a good safety check
       console.error("No user profile found in database!");
-      // We can still log them in with basic info, but 'tier' will be missing
-      setUser({ id: authUserData.uid, email: authUserData.email, name: authUserData.displayName });
+      const minimalUserData = { id: authUserData.uid, email: authUserData.email, name: authUserData.displayName, tier: 'free', createdAt: new Date().toISOString() };
+      setUser(minimalUserData);
+      localStorage.setItem('incdrops_user', JSON.stringify(minimalUserData));
+      localStorage.setItem('incdrops_tier', 'free');
       setPage('generator');
     }
   };
+  // --- END OF FIXED FUNCTION ---
 
   const handleLogout = async () => {
     try {
@@ -93,10 +91,9 @@ export default function App() {
     }
     setUser(null);
     localStorage.removeItem('incdrops_user');
-    localStorage.removeItem('incdrops_tier'); // Also remove tier
+    localStorage.removeItem('incdrops_tier'); 
   };
 
-  // This hash-based routing is great
   useEffect(() => {
     const onHashChange = () => {
       const hash = window.location.hash.replace('#', '');
@@ -125,7 +122,7 @@ export default function App() {
       {page === 'auth' && <AuthPage onNavigate={handleNavigate} onLogin={handleLogin} />}
       {page === 'account' && <AccountSettings onNavigate={handleNavigate} onLogout={handleLogout} />}
       {page === 'terms' && <TermsOfService onNavigate={handleNavigate} />}
-      {page === 'privacy' && <PrivacyPolicy onNavigate={handleNavigate} />}
+      {page ===a 'privacy' && <PrivacyPolicy onNavigate={handleNavigate} />}
       {page === 'api-access' && <APIAccess onNavigate={handleNavigate} />}
       {page === 'integrations' && <Integrations onNavigate={handleNavigate} />}
       {page === 'roadmap' && <Roadmap onNavigate={handleNavigate} />}
