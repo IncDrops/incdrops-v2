@@ -88,8 +88,22 @@ exports.stripeWebhook = onRequest({
         return;
       }
 
-      // 4. Get the Price ID and determine the new tier
-      const priceId = session.line_items.data[0].price.id;
+      // 4. Retrieve the line items from Stripe (they're not included by default)
+      let priceId;
+      try {
+        const checkoutSession = await stripeClient.checkout.sessions.retrieve(
+          session.id,
+          { expand: ['line_items'] }
+        );
+        priceId = checkoutSession.line_items.data[0].price.id;
+        console.log(`Retrieved price ID: ${priceId}`);
+      } catch (err) {
+        console.error("Error retrieving line items from Stripe:", err);
+        response.status(500).send("Error retrieving line items.");
+        return;
+      }
+
+      // 5. Determine the new tier based on Price ID
       let newTier = 'free'; // Default
       
       // Match the Price IDs you gave me
@@ -98,7 +112,7 @@ exports.stripeWebhook = onRequest({
       if (priceId === 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt') newTier = 'business';
 
       try {
-        // 5. Update the user's document in Firestore
+        // 6. Update the user's document in Firestore
         const userRef = db.collection('users').doc(firebaseUID);
         await userRef.update({
           tier: newTier,
