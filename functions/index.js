@@ -12,8 +12,8 @@ admin.initializeApp();
 // Define the Stripe secret key using the new method
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 
-// This is your app's live URL.
-const YOUR_WEBSITE_URL = "https.www.incdrops.com"; // Your Vercel URL
+// --- THIS IS THE FIXED LINE ---
+const YOUR_WEBSITE_URL = "https://www.incdrops.com"; // Your Vercel URL
 
 /**
  * Creates a Stripe Checkout session (2nd Gen)
