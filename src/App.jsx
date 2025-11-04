@@ -55,7 +55,6 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // --- THIS IS THE FIXED FUNCTION ---
   const handleLogin = async (authUserData) => {
     // 1. Get the user's profile from Firestore
     const userDocRef = doc(db, 'users', authUserData.uid);
@@ -81,7 +80,6 @@ export default function App() {
       setPage('generator');
     }
   };
-  // --- END OF FIXED FUNCTION ---
 
   const handleLogout = async () => {
     try {
@@ -122,7 +120,8 @@ export default function App() {
       {page === 'auth' && <AuthPage onNavigate={handleNavigate} onLogin={handleLogin} />}
       {page === 'account' && <AccountSettings onNavigate={handleNavigate} onLogout={handleLogout} />}
       {page === 'terms' && <TermsOfService onNavigate={handleNavigate} />}
-      {page ===a 'privacy' && <PrivacyPolicy onNavigate={handleNavigate} />}
+      {/* --- THIS IS THE FIXED LINE --- */}
+      {page === 'privacy' && <PrivacyPolicy onNavigate={handleNavigate} />}
       {page === 'api-access' && <APIAccess onNavigate={handleNavigate} />}
       {page === 'integrations' && <Integrations onNavigate={handleNavigate} />}
       {page === 'roadmap' && <Roadmap onNavigate={handleNavigate} />}
