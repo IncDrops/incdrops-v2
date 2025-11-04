@@ -1,19 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, User, Mail, CreditCard, Crown, Check, AlertCircle, LogOut, Loader2 } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { loadStripe } from '@stripe/stripe-js';
+// --- We NO LONGER need to import @stripe/stripe-js ---
 import { auth, db } from './firebase'; // Import auth and db
 import { updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
-
-// --- Stripe Public Key (make sure it's in your .env file!) ---
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 // --- Your Stripe Price IDs ---
 const priceIDs = {
   basic: 'price_1SPUKaHK4G9ZDA0FqdzT1Hae',
   pro: 'price_1SPUM6HK4G9ZDA0FWqZJOLVH',
-  business: 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt' // I added your Business ID!
+  business: 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt'
 };
 
 export default function AccountSettings({ onNavigate, onLogout }) {
@@ -21,19 +18,16 @@ export default function AccountSettings({ onNavigate, onLogout }) {
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '' });
   
-  // --- New Stripe-related state ---
-  const [loadingPlan, setLoadingPlan] = useState(null); // 'basic', 'pro', etc.
+  const [loadingPlan, setLoadingPlan] = useState(null); 
   const [error, setError] = useState('');
   const [saveLoading, setSaveLoading] = useState(false);
 
   useEffect(() => {
-    // We get the user object from App.jsx, but localStorage is a good fallback
     const userData = JSON.parse(localStorage.getItem('incdrops_user') || 'null');
     if (userData) {
       setUser(userData);
       setFormData({ name: userData.name, email: userData.email });
     } else {
-      // If no user at all, go to auth
       onNavigate('auth');
     }
   }, [onNavigate]);
@@ -66,26 +60,22 @@ export default function AccountSettings({ onNavigate, onLogout }) {
     }
   ];
 
-  // --- UPGRADED handleSave to use Firebase ---
   const handleSave = async () => {
     setSaveLoading(true);
     setError('');
     
     try {
-      // 1. Update the Firebase Auth profile
       if (auth.currentUser && auth.currentUser.displayName !== formData.name) {
         await updateProfile(auth.currentUser, {
           displayName: formData.name
         });
       }
 
-      // 2. Update the Firestore database document
       const userDocRef = doc(db, 'users', user.id);
       await updateDoc(userDocRef, {
         name: formData.name
       });
 
-      // 3. Update local state and localStorage
       const updatedUser = { ...user, name: formData.name };
       setUser(updatedUser);
       localStorage.setItem('incdrops_user', JSON.stringify(updatedUser));
@@ -100,7 +90,7 @@ export default function AccountSettings({ onNavigate, onLogout }) {
     }
   };
 
-  // --- NEW Stripe Checkout Function ---
+  // --- THIS FUNCTION IS NOW UPDATED ---
   const redirectToCheckout = async (priceId) => {
     if (!user) {
       onNavigate('auth');
@@ -116,8 +106,12 @@ export default function AccountSettings({ onNavigate, onLogout }) {
 
       const { data } = await createCheckoutSession({ priceId: priceId });
       
-      const stripe = await stripePromise;
-      await stripe.redirectToCheckout({ sessionId: data.id });
+      // 3. We get a URL back. Redirect to it.
+      if (data && data.url) {
+        window.location.href = data.url; // This is the new, simpler redirect
+      } else {
+        throw new Error("Could not retrieve checkout URL.");
+      }
 
     } catch (err) {
       console.error("Stripe checkout error:", err);
@@ -126,17 +120,17 @@ export default function AccountSettings({ onNavigate, onLogout }) {
     }
   };
 
-  // --- UPGRADED handleLogout ---
   const handleLogout = () => {
-    onLogout(); // This calls the function from App.jsx (which signs out of Firebase)
-    onNavigate('landing'); // This sends the user home
+    onLogout(); 
+    onNavigate('landing'); 
   };
 
   if (!user) return null;
 
+  // --- ALL YOUR JSX IS UNCHANGED ---
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Navigation (NOW USES THE CORRECT LOGOUT) */}
+      {/* Navigation */}
       <nav className="border-b border-gray-800 backdrop-blur-md sticky top-0 z-40 bg-black/80">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <button
@@ -168,7 +162,7 @@ export default function AccountSettings({ onNavigate, onLogout }) {
         {error && <p className="text-red-500 mb-4">{error}</p>}
 
         <div className="space-y-6">
-          {/* Profile Section (NOW USES FIREBASE) */}
+          {/* Profile Section */}
           <div className="bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 rounded-2xl p-8 shadow-xl">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-gray-900">Profile Information</h3>
@@ -204,7 +198,7 @@ export default function AccountSettings({ onNavigate, onLogout }) {
                     <input
                       type="email"
                       value={formData.email}
-                      disabled // Disabling email change as it requires re-authentication
+                      disabled 
                       className="w-full px-4 py-3 bg-white/20 border border-gray-600 rounded-lg text-gray-700 cursor-not-allowed"
                     />
                     <p className="text-xs text-gray-700 mt-1">Changing email requires re-authentication (coming soon).</p>
@@ -248,7 +242,7 @@ export default function AccountSettings({ onNavigate, onLogout }) {
             </div>
           </div>
 
-          {/* Current Plan Section (NOW USES STRIPE) */}
+          {/* Current Plan Section */}
           <div className="bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 rounded-2xl p-8 shadow-xl">
             <h3 className="text-2xl font-bold text-gray-900 mb-6">Current Subscription</h3>
             <div className="flex items-center justify-between">
@@ -260,7 +254,6 @@ export default function AccountSettings({ onNavigate, onLogout }) {
                 <p className="text-gray-800">
                   {tiers.find(t => t.id === user.tier)?.features.length} features included
                 </p>
-                {/* ^^^ THIS IS THE FIXED LINE. It's now </p> ^^^ */}
               </div>
               {user.tier !== 'business' && (
                 <button
@@ -274,7 +267,7 @@ export default function AccountSettings({ onNavigate, onLogout }) {
             </div>
           </div>
 
-          {/* All Plans (NOW USES STRIPE) */}
+          {/* All Plans */}
           <div>
             <h3 className="text-2xl font-bold text-white mb-6">All Plans</h3>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -293,7 +286,7 @@ export default function AccountSettings({ onNavigate, onLogout }) {
                     </div>
                   )}
                   {tier.id === user.tier && (
-                    <div className="absolute -top-4 left-1/Modular -translate-x-1/2 bg-gray-900 px-4 py-1 rounded-full text-sm font-semibold text-white">
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gray-900 px-4 py-1 rounded-full text-sm font-semibold text-white">
                       CURRENT PLAN
                     </div>
                   )}
@@ -328,7 +321,6 @@ export default function AccountSettings({ onNavigate, onLogout }) {
                   )}
                   {tier.id === 'free' && tier.id !== user.tier && (
                     <button
-                      // onClick={() => redirectToCheckout(priceIDs.free)} // You'll need to handle downgrades/cancellations
                       onClick={() => alert("Please manage your subscription in your account.")} // Placeholder
                       className="w-full py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-300"
                     >

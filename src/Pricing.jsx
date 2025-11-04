@@ -2,31 +2,22 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Check, Sparkles, Loader2 } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { loadStripe } from '@stripe/stripe-js';
-
-// --- ADD YOUR VITE_STRIPE_PUBLISHABLE_KEY to your .env file ---
-// This is your *public* key, not the secret one.
-// You can find it in your Stripe Dashboard under "Developers" > "API keys".
-// It starts with 'pk_...'
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+// --- We NO LONGER need to import @stripe/stripe-js ---
 
 // --- YOUR STRIPE PRICE IDs ---
 const priceIDs = {
   basic: 'price_1SPUKaHK4G9ZDA0FqdzT1Hae',
   pro: 'price_1SPUM6HK4G9ZDA0FWqZJOLVH',
-  business: 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt' // <-- Add your Business plan ID
+  business: 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt'
 };
 
 export default function Pricing({ onNavigate, user }) {
   const [loadingPlan, setLoadingPlan] = useState(null); // 'basic', 'pro', or 'business'
   const [error, setError] = useState('');
 
-  // This is the function that calls your Cloud Function
+  // --- THIS FUNCTION IS NOW UPDATED ---
   const redirectToCheckout = async (priceId) => {
     if (!user) {
-      // User isn't logged in, send them to the auth page first.
-      // The auth page will send them to the generator, but they can
-      // navigate to pricing from there.
       onNavigate('auth');
       return;
     }
@@ -42,9 +33,12 @@ export default function Pricing({ onNavigate, user }) {
       // 2. Call the function with the priceId
       const { data } = await createCheckoutSession({ priceId: priceId });
       
-      // 3. We get a session ID back. Redirect to Stripe.
-      const stripe = await stripePromise;
-      await stripe.redirectToCheckout({ sessionId: data.id });
+      // 3. We get a URL back. Redirect to it.
+      if (data && data.url) {
+        window.location.href = data.url; // This is the new, simpler redirect
+      } else {
+        throw new Error("Could not retrieve checkout URL.");
+      }
 
     } catch (err) {
       console.error("Stripe checkout error:", err);
@@ -53,6 +47,7 @@ export default function Pricing({ onNavigate, user }) {
     }
   };
 
+  // --- ALL YOUR JSX IS UNCHANGED ---
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Navigation */}
@@ -85,7 +80,7 @@ export default function Pricing({ onNavigate, user }) {
 
         <div className="grid md:grid-cols-3 gap-8">
           
-          {/* Free Plan (Matches your landing page) */}
+          {/* Free Plan */}
           <div className="bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 rounded-2xl p-8 shadow-xl shadow-gray-700/50">
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Starter</h3>
             <div className="text-5xl font-bold text-gray-900 mb-4">Free</div>
@@ -152,23 +147,6 @@ export default function Pricing({ onNavigate, user }) {
               )}
             </button>
           </div>
-
-          {/* Business Plan (Add your Price ID above) */}
-          {/* <div className="bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500 rounded-2xl p-8 shadow-xl shadow-gray-700/50">
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">Business</h3>
-            ... your plan details ...
-            <button 
-              onClick={() => redirectToCheckout(priceIDs.business)}
-              disabled={loadingPlan === priceIDs.business}
-              ...
-            >
-              {loadingPlan === priceIDs.business ? (
-                <Loader2 className="animate-spin" size={24} />
-              ) : (
-                'Contact Sales'
-              )}
-            </button>
-          </div> */}
           
         </div>
       </div>

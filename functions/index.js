@@ -12,7 +12,7 @@ admin.initializeApp();
 // Define the Stripe secret key using the new method
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 
-// --- THIS IS THE FIXED LINE ---
+// This is your app's live URL.
 const YOUR_WEBSITE_URL = "https://www.incdrops.com"; // Your Vercel URL
 
 /**
@@ -59,10 +59,12 @@ exports.createCheckoutSession = onCall({
         },
       });
 
-      // 5. Send the session ID back to the app
+      // --- 5. THIS IS THE FIXED LINE ---
+      // We now return the full URL, not just the ID
       return {
-        id: session.id,
+        url: session.url,
       };
+      
     } catch (error) {
       console.error("Stripe Checkout Error:", error);
       throw new HttpsError(
