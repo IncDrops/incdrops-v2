@@ -1,21 +1,18 @@
-// This is your new file: src/Pricing.jsx
 import React, { useState } from 'react';
 import { ArrowLeft, Check, Sparkles, Loader2 } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-// --- We NO LONGER need to import @stripe/stripe-js ---
 
-// --- YOUR STRIPE PRICE IDs ---
+// --- PASTE YOUR NEW TEST PRICE IDs HERE ---
 const priceIDs = {
-  basic: 'price_1SPUKaHK4G9ZDA0FqdzT1Hae',
-  pro: 'price_1SPUM6HK4G9ZDA0FWqZJOLVH',
-  business: 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt'
+  basic: 'price_1SPUR3HK4G9ZDA0FoWrY7Qak',
+  pro: 'price_1SPdMsHK4G9ZDA0FGibpxGrG',
+  business: 'price_1SPdNCHK4G9ZDA0Fjay2IoFD'
 };
 
 export default function Pricing({ onNavigate, user }) {
-  const [loadingPlan, setLoadingPlan] = useState(null); // 'basic', 'pro', or 'business'
+  const [loadingPlan, setLoadingPlan] = useState(null); 
   const [error, setError] = useState('');
 
-  // --- THIS FUNCTION IS NOW UPDATED ---
   const redirectToCheckout = async (priceId) => {
     if (!user) {
       onNavigate('auth');
@@ -26,16 +23,13 @@ export default function Pricing({ onNavigate, user }) {
     setError('');
 
     try {
-      // 1. Get a reference to your cloud function
       const functions = getFunctions();
       const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
 
-      // 2. Call the function with the priceId
       const { data } = await createCheckoutSession({ priceId: priceId });
       
-      // 3. We get a URL back. Redirect to it.
       if (data && data.url) {
-        window.location.href = data.url; // This is the new, simpler redirect
+        window.location.href = data.url; 
       } else {
         throw new Error("Could not retrieve checkout URL.");
       }

@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, User, Mail, CreditCard, Crown, Check, AlertCircle, LogOut, Loader2 } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-// --- We NO LONGER need to import @stripe/stripe-js ---
-import { auth, db } from './firebase'; // Import auth and db
+import { auth, db } from './firebase'; 
 import { updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 
-// --- Your Stripe Price IDs ---
+// --- PASTE YOUR NEW TEST PRICE IDs HERE ---
 const priceIDs = {
-  basic: 'price_1SPUKaHK4G9ZDA0FqdzT1Hae',
-  pro: 'price_1SPUM6HK4G9ZDA0FWqZJOLVH',
-  business: 'price_1SPUNGHK4G9ZDA0FrNIo8Dzt'
+  basic: 'price_1SPUR3HK4G9ZDA0FoWrY7Qak',
+  pro: 'price_1SPdMsHK4G9ZDA0FGibpxGrG',
+  business: 'price_1SPdNCHK4G9ZDA0Fjay2IoFD'
 };
 
 export default function AccountSettings({ onNavigate, onLogout }) {
@@ -90,7 +89,6 @@ export default function AccountSettings({ onNavigate, onLogout }) {
     }
   };
 
-  // --- THIS FUNCTION IS NOW UPDATED ---
   const redirectToCheckout = async (priceId) => {
     if (!user) {
       onNavigate('auth');
@@ -106,9 +104,8 @@ export default function AccountSettings({ onNavigate, onLogout }) {
 
       const { data } = await createCheckoutSession({ priceId: priceId });
       
-      // 3. We get a URL back. Redirect to it.
       if (data && data.url) {
-        window.location.href = data.url; // This is the new, simpler redirect
+        window.location.href = data.url; 
       } else {
         throw new Error("Could not retrieve checkout URL.");
       }
